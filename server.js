@@ -1,8 +1,9 @@
-// server.js
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const swagger = require('./config/swagger');
+const swaggerJsdoc = require('swagger-jsdoc');
 const orderRoutes = require('./routes/orderRoutes');
 const { runMigrations, getMigrationStatus } = require('./models/migrations');
 
@@ -17,15 +18,90 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-app.use((req, res, next) => {
-    next();
+// ============================================
+// SWAGGER DOCS - JSON SPEC (for Vercel)
+// ============================================
+
+// Serve raw OpenAPI JSON spec
+const swaggerOptions = {
+    definition: {
+        openapi: '3.0.0',
+        info: {
+            title: 'Order Service API',
+            version: '1.0.0',
+            description: 'Order Microservice for SaaS Marketplace',
+        },
+        components: {
+            securitySchemes: {
+                bearerAuth: {
+                    type: 'http',
+                    scheme: 'bearer',
+                    bearerFormat: 'JWT',
+                }
+            }
+        },
+        security: [{ bearerAuth: [] }]
+    },
+    apis: ['./routes/*.js']
+};
+
+const specs = swaggerJsdoc(swaggerOptions);
+
+app.get('/api-docs.json', (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    res.send(specs);
 });
 
 // ============================================
-// SWAGGER DOCS
+// SWAGGER UI (with CDN assets for Vercel)
 // ============================================
 
-app.use('/api-docs', swagger.serve, swagger.setup);
+// Serve swagger-ui-dist static files manually for Vercel
+const swaggerUiDist = require('swagger-ui-dist');
+const swaggerUiAbsolutePath = swaggerUiDist.getAbsoluteFSPath();
+
+app.use('/api-docs', express.static(swaggerUiAbsolutePath));
+app.get('/api-docs', (req, res) => {
+    res.send(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Order Service API - Swagger UI</title>
+    <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui.css" />
+    <style>
+        .swagger-ui .topbar { display: none }
+        html { box-sizing: border-box; overflow: -moz-scrollbars-vertical; overflow-y: scroll; }
+        *, *:before, *:after { box-sizing: inherit; }
+        body { margin:0; background: #fafafa; }
+    </style>
+</head>
+<body>
+    <div id="swagger-ui"></div>
+    <script src="https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui-bundle.js" crossorigin></script>
+    <script src="https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui-standalone-preset.js" crossorigin></script>
+    <script>
+        window.onload = function() {
+            window.ui = SwaggerUIBundle({
+                url: '/api-docs.json',
+                dom_id: '#swagger-ui',
+                deepLinking: true,
+                presets: [
+                    SwaggerUIBundle.presets.apis,
+                    SwaggerUIStandalonePreset
+                ],
+                plugins: [
+                    SwaggerUIBundle.plugins.DownloadUrl
+                ],
+                layout: "StandaloneLayout"
+            });
+        };
+    </script>
+</body>
+</html>
+    `);
+});
+
 console.log(`📚 [Server] Swagger docs available at http://localhost:${PORT}/api-docs`);
 
 // ============================================
@@ -42,7 +118,7 @@ app.get('/health', (req, res) => {
 });
 
 // ============================================
-// MIGRATION STATUS ENDPOINT (for debugging)
+// MIGRATION STATUS
 // ============================================
 
 app.get('/migrations', async (req, res) => {
@@ -78,7 +154,6 @@ app.use((err, req, res, next) => {
 // START SERVER (Local) / EXPORT (Vercel)
 // ============================================
 
-// For local development
 if (process.env.NODE_ENV !== 'production') {
     async function startServer() {
         try {
@@ -91,7 +166,6 @@ if (process.env.NODE_ENV !== 'production') {
                 console.log('🔍 Health Check:      http://localhost:' + PORT + '/health');
                 console.log('📋 Migration Status:  http://localhost:' + PORT + '/migrations');
             });
-            
         } catch (error) {
             console.error('❌ [Server] Failed to start server:', error.message);
             process.exit(1);
@@ -100,5 +174,4 @@ if (process.env.NODE_ENV !== 'production') {
     startServer();
 }
 
-// Export for Vercel serverless
 module.exports = app;
