@@ -1,5 +1,4 @@
 const swaggerJsdoc = require('swagger-jsdoc');
-const swaggerUi = require('swagger-ui-express');
 
 const options = {
     definition: {
@@ -110,18 +109,4 @@ const options = {
 
 const specs = swaggerJsdoc(options);
 
-module.exports = {
-    serve: swaggerUi.serve,
-    setup: swaggerUi.setup(specs, {
-        explorer: true,
-        customCss: '.swagger-ui .topbar { display: none }',
-        customSiteTitle: 'Order Service API',
-        swaggerOptions: {
-            persistAuthorization: true,
-            displayRequestDuration: true,
-            filter: true,
-            deepLinking: true
-        }
-    }),
-    specs: specs
-};
+module.exports = specs;

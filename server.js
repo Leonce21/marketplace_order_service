@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const swagger = require('./config/swagger');
+const specs = require('./config/swagger');
 const orderRoutes = require('./routes/orderRoutes');
 const { runMigrations, getMigrationStatus } = require('./models/migrations');
 
@@ -17,17 +17,55 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // ============================================
-// SWAGGER DOCS
+// SWAGGER DOCS — Works identically on Local & Vercel
 // ============================================
 
-// Raw OpenAPI JSON spec endpoint
+// 1. Raw OpenAPI JSON spec
 app.get('/api-docs.json', (req, res) => {
     res.setHeader('Content-Type', 'application/json');
-    res.send(swagger.specs);
+    res.send(specs);
 });
 
-// Swagger UI (spec passed directly — no URL fallback to Petstore)
-app.use('/api-docs', swagger.serve, swagger.setup);
+// 2. Swagger UI served via CDN (NO static files — bulletproof everywhere)
+app.get('/api-docs', (req, res) => {
+    res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Order Service API - Swagger UI</title>
+    <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
+    <style>
+        html { box-sizing: border-box; overflow: -moz-scrollbars-vertical; overflow-y: scroll; }
+        *, *:before, *:after { box-sizing: inherit; }
+        body { margin: 0; background: #fafafa; }
+        .swagger-ui .topbar { display: none; }
+    </style>
+</head>
+<body>
+    <div id="swagger-ui"></div>
+    <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js" crossorigin></script>
+    <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-standalone-preset.js" crossorigin></script>
+    <script>
+        window.onload = function() {
+            window.ui = SwaggerUIBundle({
+                url: '/api-docs.json',
+                dom_id: '#swagger-ui',
+                deepLinking: true,
+                presets: [
+                    SwaggerUIBundle.presets.apis,
+                    SwaggerUIStandalonePreset
+                ],
+                plugins: [
+                    SwaggerUIBundle.plugins.DownloadUrl
+                ],
+                layout: 'StandaloneLayout'
+            });
+        };
+    </script>
+</body>
+</html>`);
+});
 
 console.log(`📚 [Server] Swagger docs available at http://localhost:${PORT}/api-docs`);
 
